@@ -54,7 +54,7 @@ int chrdev_init(struct omap2_mcspi *lmcspi)
 		unregister_chrdev_region(mcspi->devt, MINOR_CNT);
 		return ret;
 	}
-	
+
 	if (IS_ERR(lmcspi->spi_class = class_create(THIS_MODULE, "spi")))
 	{
 		cdev_del(&mcspi->cdev);
