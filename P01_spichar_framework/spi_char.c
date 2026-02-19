@@ -1,4 +1,5 @@
 #include <linux/module.h>
+#include <linux/version.h>
 #include <linux/fs.h>
 #include <linux/cdev.h>
 #include <linux/device.h>
@@ -55,7 +56,11 @@ int chrdev_init(struct omap2_mcspi *lmcspi)
 		return ret;
 	}
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6,4,0))
 	if (IS_ERR(lmcspi->spi_class = class_create(THIS_MODULE, "spi")))
+#else
+	if (IS_ERR(lmcspi->spi_class = class_create("spi")))
+#endif
 	{
 		cdev_del(&mcspi->cdev);
 		unregister_chrdev_region(mcspi->devt, MINOR_CNT);

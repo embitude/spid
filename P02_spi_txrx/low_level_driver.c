@@ -97,7 +97,7 @@ int omap2_mcspi_setup_transfer(struct omap2_mcspi *mcspi,
 	l = mcspi_read_reg(mcspi, OMAP2_MCSPI_CHCONF0);
 	// TODO 2.3: Select Data line 0 for reception & Data line 1 for transmission
 	// TODO 2.4: Set the word length as per word_len
-	// TODO 2.5: Set the SPIEN state as high during active state
+	// TODO 2.5: Set the SPIEN state as low during active state
 
 	/* set clock divisor */
 

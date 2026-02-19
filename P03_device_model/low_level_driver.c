@@ -1,4 +1,5 @@
 #include <linux/kernel.h>
+#include <linux/version.h>
 #include <linux/init.h>
 #include <linux/interrupt.h>
 #include <linux/module.h>
@@ -204,14 +205,20 @@ static int my_mcspi_probe(struct platform_device *pdev)
     return 0;
 }
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6,11,0))
 static int my_mcspi_remove(struct platform_device *pdev)
+#else
+static void my_mcspi_remove(struct platform_device *pdev)
+#endif
 {
 	struct omap2_mcspi *mcspi;
     // TODO 1.2: De-initialize the character driver interface
 
 	mcspi = platform_get_drvdata(pdev);
 	//TODO 3.7 Free up the mcspi data structure
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6,11,0))
 	return 0;
+#endif
 }
 
 //TODO 4.1 Populate the id table with compatible property as per dtb
@@ -232,6 +239,7 @@ static struct platform_driver my_mcspi_driver = {
 static int __init omap_spi_init_driver(void)
 {
 	//TODO 3.1 Register the platform driver
+	return 0;
 }
 
 static void __exit omap_spi_exit_driver(void)

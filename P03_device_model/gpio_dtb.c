@@ -1,7 +1,9 @@
 #include <linux/kernel.h>
 #include <linux/module.h>
+#include <linux/version.h>
 #include <linux/init.h>
 #include <linux/platform_device.h>
+#include <linux/of.h>
 #include <linux/gpio.h>
 #include <linux/fs.h>
 #include <linux/errno.h>
@@ -82,10 +84,16 @@ static struct file_operations FileOps =
 };
 
 static int sample_drv_probe(struct platform_device *pdev) {
+	int ret;
+	struct device *dev_ret;
 	struct device_node *np = pdev->dev.of_node;
 	printk("Probe Called\n");
 
 	of_property_read_u32(np, "led-number", &gpio_number);
+    if ((ret = gpio_request_one(gpio_number, GPIOF_OUT_INIT_LOW, "led1")) != 0) {
+        printk("GPIO request failed %d\n", ret);
+        return ret;
+    }
 
 	//gpio_number = *(unsigned int *)(pdev->dev.platform_data);
 	init_result = alloc_chrdev_region( &first, 0, 1, "gpio_drv" );
@@ -97,19 +105,23 @@ static int sample_drv_probe(struct platform_device *pdev) {
 	}
 	printk("Major Nr: %d\n", MAJOR(first));
 
-	if ( (cl = class_create( THIS_MODULE, "gpiodrv" ) ) == NULL )
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6,4,0))
+	if (IS_ERR(cl = class_create(THIS_MODULE, "gpiodrv")))
+#else
+	if (IS_ERR(cl = class_create("gpiodrv")))
+#endif
 	{
 		printk( KERN_ALERT "Class creation failed\n" );
 		unregister_chrdev_region( first, 1 );
-		return -1;
+		return PTR_ERR(cl);
 	}
 
-	if( device_create( cl, NULL, first, NULL, "gpio_drv%d", 0) == NULL )
+	if((dev_ret = device_create( cl, NULL, first, NULL, "gpio_drv%d", 0)) == NULL )
 	{
 		printk( KERN_ALERT "Device creation failed\n" );
 		class_destroy(cl);
 		unregister_chrdev_region( first, 1 );
-		return -1;
+		return PTR_ERR(dev_ret);
 	}
 
 	cdev_init( &c_dev, &FileOps );
@@ -126,21 +138,28 @@ static int sample_drv_probe(struct platform_device *pdev) {
 	return 0;
 }
 
-static int sample_drv_remove(struct platform_device *pdev){
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6,11,0))
+static int sample_drv_remove(struct platform_device *pdev)
+#else
+static void sample_drv_remove(struct platform_device *pdev)
+#endif
+{
 	cdev_del( &c_dev );
 	device_destroy( cl, first );
 	class_destroy( cl );
 	unregister_chrdev_region( first, 1 );
+	gpio_free(gpio_number);
 
 	printk(KERN_ALERT "Device unregistered\n");
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6,11,0))
 	return 0;
+#endif
 }
 static const struct of_device_id gpio_led_dt[] = {
 	    { .compatible = "my-led", },
-		    { }
+		{ }
 };  
-
 MODULE_DEVICE_TABLE(of, gpio_led_dt);
 static struct platform_driver sample_pldriver = {
 	.probe          = sample_drv_probe,
@@ -151,7 +170,6 @@ static struct platform_driver sample_pldriver = {
 	},
 };
 
-
 static int init_gpio(void)
 {
 	printk(KERN_ALERT "\n Welcome to sample Platform driver.... \n");
@@ -160,8 +178,6 @@ static int init_gpio(void)
 	platform_driver_register(&sample_pldriver);
 
 	return 0;
-
-	
 }
 
 void cleanup_gpio(void)

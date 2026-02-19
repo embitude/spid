@@ -1,0 +1,31 @@
+From 51283f1ed91a60b9700c72430902d85cf458c3ee Mon Sep 17 00:00:00 2001
+From: Embitude Trainings <info@embitude.in>
+Date: Thu, 19 Feb 2026 21:56:02 +0530
+Subject: [PATCH] Disabled Idling for SPI Module
+
+---
+ arch/arm/boot/dts/ti/omap/am335x-boneblack.dts | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/arch/arm/boot/dts/ti/omap/am335x-boneblack.dts b/arch/arm/boot/dts/ti/omap/am335x-boneblack.dts
+index b4fdcf9c0..248958aa6 100644
+--- a/arch/arm/boot/dts/ti/omap/am335x-boneblack.dts
++++ b/arch/arm/boot/dts/ti/omap/am335x-boneblack.dts
+@@ -14,6 +14,14 @@ / {
+ 	compatible = "ti,am335x-bone-black", "ti,am335x-bone", "ti,am33xx";
+ };
+ 
++/* For SPI Drivers */
++&{/ocp/interconnect@48000000/segment@0/target-module@30000} {
++    /* Prevent the kernel from resetting or idling this module at boot */
++    ti,no-reset-on-init;
++    ti,no-idle;
++    status = "okay";
++};
++
+ &cpu0_opp_table {
+ 	/*
+ 	 * All PG 2.0 silicon may not support 1GHz but some of the early
+-- 
+2.34.1
+

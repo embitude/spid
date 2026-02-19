@@ -1,4 +1,5 @@
 #include <linux/kernel.h>
+#include <linux/version.h>
 #include <linux/init.h>
 #include <linux/interrupt.h>
 #include <linux/module.h>
@@ -20,7 +21,11 @@
 #include <linux/spi/spi.h>
 
 struct dummy_master {
-	struct spi_master	*master;
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6,9,0))
+	struct spi_master *master;
+#else
+	struct spi_controller *master;
+#endif
 	/* Virtual base address of the controller */
 	void __iomem		*base;
 	unsigned long		phys;
@@ -38,8 +43,13 @@ static void dummy_spi_cleanup(struct spi_device *spi)
 {
 	printk("@@@ Dummy clean up invoked @@@\n");
 }
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6,9,0))
 static int dummy_transfer_one_message(struct spi_master *master,
 		struct spi_message *m)
+#else
+static int dummy_transfer_one_message(struct spi_controller *master,
+		struct spi_message *m)
+#endif
 {
 	int status = 0;
 	char *buf;
@@ -60,7 +70,11 @@ static int dummy_transfer_one_message(struct spi_master *master,
 
 static int dummy_spi_probe(struct platform_device *pdev)
 {
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6,9,0))
 	struct spi_master	*master = NULL;
+#else
+	struct spi_controller *master = NULL;
+#endif
 	struct dummy_master	*mcspi;
 	int	status = 0;
 	struct device_node	*node = pdev->dev.of_node;
@@ -83,23 +97,49 @@ static int dummy_spi_probe(struct platform_device *pdev)
 
 	platform_set_drvdata(pdev, master);
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6,9,0))
 	mcspi = spi_master_get_devdata(master);
+#else
+	mcspi = spi_controller_get_devdata(master);
+#endif
 	mcspi->master = master;
 
-	//TODO 4.18: Register the spi master	
+	/*
+	 * TODO 4.18: Register the spi master	
+	 * Use spi_register_master(struct spi_master *) for 4.19.103
+     * and spi_register_controller(struct spi_controller *) for 6.12.54
+	 */
 	return status;
 }
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6,11,0))
 static int dummy_spi_remove(struct platform_device *pdev)
+#else
+static void dummy_spi_remove(struct platform_device *pdev)
+#endif
 {
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6,9,0))
 	struct spi_master	*master;
+#else
+	struct spi_controller	*master;
+#endif
 	struct omap2_mcspi	*mcspi;
 
 	master = platform_get_drvdata(pdev);
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6,9,0))
 	mcspi = spi_master_get_devdata(master);
-	//TODO 4.20: Unregister the master
+#else
+	mcspi = spi_controller_get_devdata(master);
+#endif
+	/* 
+	 * TODO 4.20: Unregister the master
+	 * Use spi_unregister_master(struct spi_master *) for 4.19.103
+	 * Use spi_unregister_controller(struct spi_controller *) for 6.12.54
+     */
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6,11,0))
 	return 0;
+#endif
 }
 
 //TODO 4.12: Populate the device-id table. Compatible property should match with dtb

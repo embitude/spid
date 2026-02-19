@@ -1,4 +1,5 @@
 #include <linux/kernel.h>
+#include <linux/version.h>
 #include <linux/init.h>
 #include <linux/interrupt.h>
 #include <linux/module.h>
@@ -20,6 +21,9 @@
 #include <linux/spi/spi.h>
 #include <linux/platform_data/spi-omap2-mcspi.h>
 #include "low_level_driver.h"
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6,9,0))
+#include "internals.h"
+#endif
 
 #define DMA_MIN_BYTES			25
 
@@ -84,13 +88,22 @@ static u32 omap2_mcspi_calc_divisor(u32 speed_hz)
 
 static int omap2_mcspi_request_dma(struct spi_device *spi)
 {
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6,9,0))
 	struct spi_master	*master = spi->master;
+#else
+	struct spi_controller *master = spi->controller;
+#endif
 	struct omap2_mcspi	*mcspi;
 	struct omap2_mcspi_dma	*mcspi_dma;
 	int ret = 0;
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6,9,0))
 	mcspi = spi_master_get_devdata(master);
 	mcspi_dma = mcspi->dma_channels + spi->chip_select;
+#else
+	mcspi = spi_controller_get_devdata(master);
+	mcspi_dma = mcspi->dma_channels + spi->chip_select[0];
+#endif
 
 	init_completion(&mcspi_dma->dma_rx_completion);
 	init_completion(&mcspi_dma->dma_tx_completion);
@@ -119,7 +132,11 @@ no_dma:
 
 static int omap2_mcspi_setup_transfer(struct spi_device *spi, struct spi_transfer *t)
 {
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6,9,0))
 	struct omap2_mcspi *mcspi = spi_master_get_devdata(spi->master);
+#else
+	struct omap2_mcspi *mcspi = spi_controller_get_devdata(spi->controller);
+#endif
 	struct omap2_mcspi_dma	*mcspi_dma;
 
 	u32 l = 0, div = 0;
@@ -133,7 +150,6 @@ static int omap2_mcspi_setup_transfer(struct spi_device *spi, struct spi_transfe
 	//TODO 6.8: Ucomment the below & Request the DMA Channel, if any of mcspi_dma->dma_rx or mcspi_dma->dma_tx is null.
 #if 0
 	if (!mcspi_dma->dma_rx || !mcspi_dma->dma_tx) {
-		ret = omap2_mcspi_request_dma(spi);
 		if (ret)
 			dev_warn(&spi->dev, "not using DMA for McSPI (%d)\n",
 				 ret);
@@ -167,7 +183,11 @@ static void omap2_mcspi_set_dma_req(const struct spi_device *spi,
 		int is_read, int enable)
 {
 	u32 l, rw;
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6,9,0))
 	struct omap2_mcspi *mcspi = spi_master_get_devdata(spi->master);
+#else
+	struct omap2_mcspi *mcspi = spi_controller_get_devdata(spi->controller);
+#endif
 
 	l = mcspi_read_reg(mcspi, OMAP2_MCSPI_CHCONF0);
 
@@ -192,8 +212,13 @@ static void omap2_mcspi_set_enable(struct omap2_mcspi *mcspi, int enable)
 static void omap2_mcspi_rx_callback(void *data)
 {
 	struct spi_device *spi = data;
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6,9,0))
 	struct omap2_mcspi *mcspi = spi_master_get_devdata(spi->master);
 	struct omap2_mcspi_dma *mcspi_dma = &mcspi->dma_channels[spi->chip_select];
+#else
+	struct omap2_mcspi *mcspi = spi_controller_get_devdata(spi->controller);
+	struct omap2_mcspi_dma *mcspi_dma = &mcspi->dma_channels[spi->chip_select[0]];
+#endif
 
 	ENTER();
 
@@ -207,8 +232,13 @@ static void omap2_mcspi_rx_callback(void *data)
 static void omap2_mcspi_tx_callback(void *data)
 {
 	struct spi_device *spi = data;
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6,9,0))
 	struct omap2_mcspi *mcspi = spi_master_get_devdata(spi->master);
 	struct omap2_mcspi_dma *mcspi_dma = &mcspi->dma_channels[spi->chip_select];
+#else
+	struct omap2_mcspi *mcspi = spi_controller_get_devdata(spi->controller);
+	struct omap2_mcspi_dma *mcspi_dma = &mcspi->dma_channels[spi->chip_select[0]];
+#endif
 
 	ENTER();
 
@@ -223,13 +253,16 @@ static void omap2_mcspi_tx_dma(struct spi_device *spi,
 				struct spi_transfer *xfer,
 				struct dma_slave_config cfg)
 {
-	struct omap2_mcspi	*mcspi;
-	struct omap2_mcspi_dma  *mcspi_dma;
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6,9,0))
+	struct omap2_mcspi *mcspi = spi_master_get_devdata(spi->master);
+	struct omap2_mcspi_dma *mcspi_dma = &mcspi->dma_channels[spi->chip_select];
+#else
+	struct omap2_mcspi *mcspi = spi_controller_get_devdata(spi->controller);
+	struct omap2_mcspi_dma *mcspi_dma = &mcspi->dma_channels[spi->chip_select[0]];
+#endif
 	struct scatterlist sg;
 
 	ENTER();
-	mcspi = spi_master_get_devdata(spi->master);
-	mcspi_dma = &mcspi->dma_channels[spi->chip_select];
 
 	if (mcspi_dma->dma_tx) {
 		struct dma_async_tx_descriptor *tx;
@@ -268,12 +301,16 @@ static unsigned
 omap2_mcspi_rx_dma(struct spi_device *spi, struct spi_transfer *xfer,
 				struct dma_slave_config cfg)
 {
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6,9,0))
 	struct omap2_mcspi	*mcspi = spi_master_get_devdata(spi->master);
-	struct omap2_mcspi_dma  *mcspi_dma;
+	struct omap2_mcspi_dma *mcspi_dma = &mcspi->dma_channels[spi->chip_select];
+#else
+	struct omap2_mcspi *mcspi = spi_controller_get_devdata(spi->controller);
+	struct omap2_mcspi_dma *mcspi_dma = &mcspi->dma_channels[spi->chip_select[0]];
+#endif
 	unsigned int count;
 	struct scatterlist sg;
 
-	mcspi_dma = &mcspi->dma_channels[spi->chip_select];
 	count = xfer->len;
 
 	if (mcspi_dma->dma_rx) {
@@ -318,8 +355,13 @@ omap2_mcspi_txrx_dma(struct spi_device *spi, struct spi_transfer *xfer)
 	void __iomem            *irqstat_reg;
 	int			wait_res;
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6,9,0))
 	mcspi = spi_master_get_devdata(spi->master);
 	mcspi_dma = &mcspi->dma_channels[spi->chip_select];
+#else
+	mcspi = spi_controller_get_devdata(spi->controller);
+	mcspi_dma = &mcspi->dma_channels[spi->chip_select[0]];
+#endif
 
 	ENTER();
 
@@ -403,13 +445,21 @@ omap2_mcspi_txrx_dma(struct spi_device *spi, struct spi_transfer *xfer)
 static void omap2_mcspi_set_fifo(const struct spi_device *spi,
 				struct spi_transfer *t, int enable)
 {
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6,9,0))
 	struct spi_master *master = spi->master;
+#else
+	struct spi_controller *master = spi->controller;
+#endif
 	struct omap2_mcspi *mcspi;
 	unsigned int wcnt;
 	int max_fifo_depth, bytes_per_word;
 	u32 chconf, xferlevel;
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6,9,0))
 	mcspi = spi_master_get_devdata(master);
+#else
+	mcspi = spi_controller_get_devdata(master);
+#endif
 
 	ENTER();
 
@@ -462,10 +512,16 @@ static void omap2_mcspi_cleanup(struct spi_device *spi)
 	struct omap2_mcspi	*mcspi;
 	struct omap2_mcspi_dma	*mcspi_dma;
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6,9,0))
 	mcspi = spi_master_get_devdata(spi->master);
 
 	if (spi->chip_select < spi->master->num_chipselect) {
 		mcspi_dma = &mcspi->dma_channels[spi->chip_select];
+#else
+	mcspi = spi_controller_get_devdata(spi->controller);
+	if (spi->chip_select[0] < spi->controller->num_chipselect) {
+		mcspi_dma = &mcspi->dma_channels[spi->chip_select[0]];
+#endif
 
 		if (mcspi_dma->dma_rx) {
 			dma_release_channel(mcspi_dma->dma_rx);
@@ -478,10 +534,19 @@ static void omap2_mcspi_cleanup(struct spi_device *spi)
 	}
 }
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6,9,0))
 static int spi_transfer_one_message(struct spi_master *master,
 		struct spi_message *m)
+#else
+static int spi_transfer_one_message(struct spi_controller *master,
+		struct spi_message *m)
+#endif
 {
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6,9,0))
 	struct omap2_mcspi *mcspi = spi_master_get_devdata(master);
+#else
+	struct omap2_mcspi *mcspi = spi_controller_get_devdata(master);
+#endif
 	struct spi_device *spi = m->spi;
 	void __iomem        *base = mcspi->base;
     void __iomem        *tx_reg;
@@ -494,7 +559,11 @@ static int spi_transfer_one_message(struct spi_master *master,
 	int status = 0;
 
 	struct omap2_mcspi_dma	*mcspi_dma;
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6,9,0))
 	mcspi_dma = mcspi->dma_channels + spi->chip_select;
+#else
+	mcspi_dma = mcspi->dma_channels + spi->chip_select[0];
+#endif
 
 	ENTER();
 
@@ -532,11 +601,18 @@ static int spi_transfer_one_message(struct spi_master *master,
 		if (t->len) {
 			//TODO 6.11: Uncomment the below
 			#if 0
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6,9,0))
 			if ((mcspi_dma->dma_rx && mcspi_dma->dma_tx) &&
 					master->cur_msg_mapped &&
 					master->can_dma(master, spi, t))
 				omap2_mcspi_set_fifo(spi, t, 1);
-			#endif
+#else
+			if ((mcspi_dma->dma_rx && mcspi_dma->dma_tx) &&
+					spi_xfer_is_dma_mapped(master, spi, t) &&
+					master->can_dma(master, spi, t))
+				omap2_mcspi_set_fifo(spi, t, 1);
+#endif
+#endif
 
 			// TODO 5.17 Enable the channel 
 			// TODO 5.18 Force the Chipselect
@@ -546,12 +622,20 @@ static int spi_transfer_one_message(struct spi_master *master,
 						+ OMAP2_MCSPI_TX0);
 			//TODO 6.12: Add the following condition:
 			//(mcspi_dma->dma_rx && mcspi_dma->dma_tx)
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6,9,0))
 			if ((0) &&
 					master->cur_msg_mapped &&
 					master->can_dma(master, spi, t)) {
 				//TODO 6.13 Invoke the omap2_mcspi_txrx_dma and assign the return value.
 				// to count
 			}
+#else
+			if ((0) &&
+					spi_xfer_is_dma_mapped(master, spi, t) &&
+					master->can_dma(master, spi, t)) {
+				count = omap2_mcspi_txrx_dma(spi, t);
+			}
+#endif
             else {
                 while (count) {
                     if (tx != NULL) {
@@ -584,9 +668,15 @@ static int spi_transfer_one_message(struct spi_master *master,
 	return 0;
 }
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6,9,0))
 static bool omap2_mcspi_can_dma(struct spi_master *master,
 				struct spi_device *spi,
 				struct spi_transfer *xfer)
+#else
+static bool omap2_mcspi_can_dma(struct spi_controller *master,
+				struct spi_device *spi,
+				struct spi_transfer *xfer)
+#endif
 {
 	return (xfer->len >= DMA_MIN_BYTES);
 }
@@ -608,7 +698,11 @@ static void omap2_mcspi_set_master_mode(struct omap2_mcspi *mcspi)
 static int my_mcspi_probe(struct platform_device *pdev)
 {
     struct omap2_mcspi  *mcspi;
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6,9,0))
 	struct spi_master *master;
+#else
+	struct spi_controller *master;
+#endif
     struct resource     *r;
 	int status, i;
 	struct device_node *node = pdev->dev.of_node;
@@ -630,8 +724,13 @@ static int my_mcspi_probe(struct platform_device *pdev)
 
     platform_set_drvdata(pdev, master);
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6,9,0))
 	mcspi = spi_master_get_devdata(master);
 	mcspi->master = master;
+#else
+	mcspi = spi_controller_get_devdata(master);
+	mcspi->ctrl = master;
+#endif
 
 	master->num_chipselect = 1;
 
@@ -667,26 +766,49 @@ static int my_mcspi_probe(struct platform_device *pdev)
 #endif
 
 	omap2_mcspi_set_master_mode(mcspi);
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6,9,0))
 	status = spi_register_master(master);
+#else
+	status = spi_register_controller(master);
+#endif
 	if (status < 0)
          goto free_master;
 
     return status;
 
 free_master:
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6,9,0))
 	spi_master_put(master);
+#else
+	spi_controller_put(master);
+#endif
 	return status;
 }
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6,11,0))
 static int my_mcspi_remove(struct platform_device *pdev)
+#else
+static void my_mcspi_remove(struct platform_device *pdev)
+#endif
 {
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6,9,0))
 	struct spi_master *master;
+#else
+	struct spi_controller *master;
+#endif
 	struct omap2_mcspi *mcspi;
 	master = platform_get_drvdata(pdev);
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6,9,0))
 	mcspi = spi_master_get_devdata(master);
 	spi_unregister_master(master);
+#else
+	mcspi = spi_controller_get_devdata(master);
+	spi_unregister_controller(master);
+#endif
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6,11,0))
 	return 0;
+#endif
 }
 
 //TODO 5.4 Populate the id table with compatible property as per dtb

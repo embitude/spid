@@ -1,4 +1,5 @@
 #include <linux/err.h>
+#include <linux/version.h>
 #include <linux/spi/spi.h>
 #include <linux/module.h>
 #include <linux/cdev.h>
@@ -90,7 +91,11 @@ static int dummy_probe(struct spi_device *spi)
 	}
 	printk("Major Nr: %d\n", MAJOR(data->devt));
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6,4,0))
 	if ((data->class = class_create(THIS_MODULE, "spidummy")) == NULL)
+#else
+	if ((data->class = class_create("spidummy")) == NULL)
+#endif
 	{
 		printk( KERN_ALERT "Class creation failed\n" );
 		unregister_chrdev_region(data->devt, 1);

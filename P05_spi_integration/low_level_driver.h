@@ -1,6 +1,7 @@
 #ifndef LOW_LEVEL_DRIVER_H
 #define LOW_LEVEL_DRIVER_H
 
+#include <linux/version.h>
 #define OMAP2_MCSPI_MAX_FREQ        48000000
 #define OMAP2_MCSPI_MAX_FIFODEPTH   64
 #define OMAP2_MCSPI_MAX_FIFOWCNT    0xFFFF
@@ -73,7 +74,11 @@ struct omap2_mcspi_dma {
 
 
 struct omap2_mcspi {
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6,9,0))
 	struct spi_master *master;
+#else
+	struct spi_controller *ctrl;
+#endif
 	/* Virtual base address of the controller */
 	void __iomem	*base;
 	unsigned long		phys;

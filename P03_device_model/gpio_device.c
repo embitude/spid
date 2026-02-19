@@ -1,4 +1,5 @@
 #include <linux/module.h>
+#include <linux/version.h>
 #include <linux/kernel.h>
 #include <linux/platform_device.h>
 #include <linux/gpio.h>
@@ -12,10 +13,13 @@
 #define RESOURCE2_END_ADDRESS 0x3FFFFF
 #define SAMPLE_DEV_IRQNUM 6
 
-int gpio_led = 53;
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6,11,0))
+static int gpio_led = 53;
+#else
+static int gpio_led = 533;
+#endif
 
-MODULE_LICENSE("GPL");
-	
+//TODO: Pass the gpio_led as platform data	
 static struct platform_device sample_device = {
 	.name = DRIVER_NAME,
 	.id = -1,
@@ -36,3 +40,5 @@ void ourcleanupmodule(void)
 }
 module_init(ourinitmodule);
 module_exit(ourcleanupmodule);
+
+MODULE_LICENSE("GPL");
